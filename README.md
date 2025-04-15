@@ -2,10 +2,9 @@ CKEditor&nbsp;5 classic editor build
 ========================================
 
 新增中文版清單
+https://domajibasset.github.io/ckeditor5-customized/
 
 The classic editor build for CKEditor&nbsp;5. Read more about the [classic editor build](https://ckeditor.com/docs/ckeditor5/latest/getting-started/legacy/installation-methods/predefined-builds.html#classic-editor) and see the [demo](https://ckeditor.com/docs/ckeditor5/latest/examples/builds/classic-editor.html).
-
-![CKEditor&nbsp;5 classic editor build screenshot](https://c.cksource.com/a/1/img/npm/ckeditor5-build-classic.png)
 
 ## Documentation
 
