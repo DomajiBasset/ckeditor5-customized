@@ -45,6 +45,7 @@ export default class CustomizedSymbols extends Plugin {
                         const insertPosition = selection.focus;
                         if (insertPosition != null) {
                             writer.insertText(aChar, currentAttributes, insertPosition);
+                            editor.editing.view.focus();
                         }
                     });
                 });
