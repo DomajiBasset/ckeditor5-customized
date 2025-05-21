@@ -1,7 +1,7 @@
 import { Editor, Plugin } from '@ckeditor/ckeditor5-core';
 import { DowncastWriter, Item, Element, ViewElement, Model, Writer } from '@ckeditor/ckeditor5-engine';
 import { ListEditing, ListIndentCommand } from '@ckeditor/ckeditor5-list';
-import { listItemDowncastRemoveConverter } from '@ckeditor/ckeditor5-list/src/list/converters';
+import { listItemDowncastRemoveConverter, reconvertItemsOnDataChange } from '@ckeditor/ckeditor5-list/src/list/converters';
 import { DowncastStrategy, ListEditingPostFixerEvent, ListItemAttributesMap } from '@ckeditor/ckeditor5-list/src/list/listediting';
 import { AttributeStrategy } from '@ckeditor/ckeditor5-list/src/listproperties/listpropertiesediting';
 import { listPropertiesUpcastConverter } from '@ckeditor/ckeditor5-list/src/listproperties/converters';
@@ -57,31 +57,33 @@ export default class CustomizedListEditing extends Plugin {
         editor.conversion.for('editingDowncast')
             .elementToElement({
                 model: elementName,
-                view: bogusPCreator([strategy.attributeName]),
-                converterPriority: 'high'
-            })
-            .add(dispatcher => {
-                dispatcher.on('attribute:listIcon', listItemDowncastConverter([strategy.attributeName], [downcastStrategy], editor));
-                dispatcher.on('remove', listItemDowncastRemoveConverter(model.schema));
-            });
-        editor.conversion.for('dataDowncast')
-            .elementToElement({
-                model: elementName,
-                view: bogusPCreator([strategy.attributeName], { dataPipeline: true }),
-                converterPriority: 'high'
-            })
-            .add(dispatcher => {
-                dispatcher.on('attribute:listIcon', listItemDowncastConverter([strategy.attributeName], [downcastStrategy], editor));
-            });
-        editor.conversion.for('downcast')
-            .elementToElement({
-                model: elementName,
                 view: bogusPCreator([...LIST_BASE_ATTRIBUTES, strategy.attributeName]),
                 converterPriority: 'high'
             })
             .add(dispatcher => {
-                dispatcher.on('attribute:listIcon', listItemDowncastConverter([...LIST_BASE_ATTRIBUTES, strategy.attributeName], [downcastStrategy], editor));
+                dispatcher.on('attribute', listItemDowncastConverter([strategy.attributeName], [downcastStrategy], editor));
                 dispatcher.on('remove', listItemDowncastRemoveConverter(model.schema));
+                dispatcher.on('attribute:alignment', (evt, data, conversionApi) => {
+                    const viewWriter = conversionApi.writer;
+                    const viewElement = conversionApi.mapper.toViewElement(data.item);
+                    const viewItem = findParentWithTag(viewElement, 'li');
+                    if (viewItem) {
+                        if (data.attributeNewValue) {
+                            viewWriter.setStyle('text-align', data.attributeNewValue, viewItem);
+                        } else {
+                            viewWriter.removeStyle('text-align', viewItem);
+                        }
+                    }
+                });
+            });
+        editor.conversion.for('dataDowncast')
+            .elementToElement({
+                model: elementName,
+                view: bogusPCreator([...LIST_BASE_ATTRIBUTES, strategy.attributeName], { dataPipeline: true }),
+                converterPriority: 'high'
+            })
+            .add(dispatcher => {
+                dispatcher.on('attribute', listItemDowncastConverter([strategy.attributeName], [downcastStrategy], editor, { dataPipeline: true }));
             });
 
         // Set up conversion.
@@ -91,12 +93,20 @@ export default class CustomizedListEditing extends Plugin {
             });
 
         // Reset list properties after indenting list items.
-        this.listenTo(editor.commands.get('indentList') as ListIndentCommand, 'afterExecute', (evt, changedBlocks) => {
+        this.listenTo(editor.commands.get('indentList') as ListIndentCommand, 'afterExecute', (evt, changedBlocks: Array<Element>) => {
             model.change(writer => {
                 for (const node of changedBlocks) {
                     if (strategy.appliesToListItem(node)) {
-                        const currentIcon = node.getAttribute('listIcon') || 0;
+                        const currentIcon = node.getAttribute('listIcon') as string || '0';
                         writer.setAttribute(strategy.attributeName, parseInt(currentIcon) + 1, node);
+
+                        const viewElement: ViewElement | undefined = editor.editing.mapper.toViewElement(node);
+                        // if (viewElement) {
+                        //     console.log(viewElement);
+                        //     const viewItem = findParentWithTag(viewElement, 'ul');
+                        //     if (!viewItem) {
+                        //     }
+                        // }
                     }
                 }
             });
@@ -110,6 +120,7 @@ export default class CustomizedListEditing extends Plugin {
             }
         });
 
+        this.listenTo(model.document, 'change:data', reconvertItemsOnDataChange(model, editor.editing, [strategy.attributeName], listEditing), { priority: 'high' });
         this._setupModelPostFixing(listEditing, strategy);
     }
 
@@ -283,4 +294,16 @@ function modelChangePostFixer(
     }
 
     return applied;
+}
+
+function findParentWithTag(viewElement: ViewElement, tagName: string): ViewElement | null {
+    let current: ViewElement | null = viewElement;
+    tagName = tagName.toLowerCase();
+    while (current) {
+        if (current.is('element') && current.name.toLowerCase() === tagName) {
+            return current;
+        }
+        current = current.parent && current.parent.is('element') ? current.parent : null;
+    }
+    return null;
 }

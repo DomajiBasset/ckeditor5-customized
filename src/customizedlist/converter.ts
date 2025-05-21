@@ -15,7 +15,8 @@ import { getDigit, toFullWidthChar } from '../utils/tool';
 export function listItemDowncastConverter(
     attributeNames: Array<string>,
     strategies: Array<DowncastStrategy>,
-    editor: Editor
+    editor: Editor,
+    { dataPipeline }: { dataPipeline?: boolean } = {}
 ): GetCallback<DowncastAttributeEvent<ListElement>> {
     const consumer = createAttributesConsumer(attributeNames);
     return (evt, data, conversionApi) => {
@@ -40,7 +41,7 @@ export function listItemDowncastConverter(
 
         const viewRange = writer.createRangeOn(viewElement);
         // Then wrap them with the new list wrappers (UL, OL, LI).
-        wrapListItemBlock(listItem, viewRange, strategies, writer);
+        wrapListItemBlock(listItem, viewRange, strategies, writer, { dataPipeline: dataPipeline });
 
         setChineseData(viewElement, writer, editor);
     };
@@ -88,7 +89,8 @@ function wrapListItemBlock(
     listItem: ListElement,
     viewRange: ViewRange,
     strategies: Array<DowncastStrategy>,
-    writer: DowncastWriter
+    writer: DowncastWriter,
+    { dataPipeline }: { dataPipeline?: boolean } = {}
 ) {
     if (!listItem.hasAttribute('listIndent')) {
         return;
@@ -99,6 +101,7 @@ function wrapListItemBlock(
     for (let indent = listItemIndent; indent >= 0; indent--) {
         const listItemViewElement = createListItemElement(writer, indent, currentListItem.getAttribute('listItemId'));//li
         const listViewElement = createListElement(writer, indent, currentListItem.getAttribute('listType'));//ol/ul
+        dataPipeline = dataPipeline ?? listViewElement.name === 'ul';
 
         for (const strategy of strategies) {
             if (
@@ -114,8 +117,8 @@ function wrapListItemBlock(
             }
         }
 
-        if (currentListItem.getAttribute('listType') === 'numbered') {
-            const aSpan = writer.createAttributeElement('span', {
+        if (currentListItem.getAttribute('listType') === 'numbered' && !dataPipeline) {
+            const aSpan = writer.createAttributeElement('p', {
                 class: 'spanClasses'
             });
             viewRange = writer.wrap(viewRange, aSpan);
@@ -194,7 +197,7 @@ function setChineseData(viewElement: ViewElement, viewWriter: DowncastWriter, ed
         }
         attributeElement = attributeElement.parent!;
     }
-    if (attributeElement.name === 'li') {
+    if (attributeElement.name === 'li' && attributeElement.parent?.name === 'ol') {
         const olElement = attributeElement.parent as ViewElement;
         const aIcon = olElement.hasAttribute('list-icon') ? olElement.getAttribute('list-icon') as string : '0';
         const aIndex = Number((attributeElement as AttributeElement).index);

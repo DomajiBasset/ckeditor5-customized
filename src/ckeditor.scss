@@ -2,12 +2,16 @@
     display: inline-block;
 }
 
+.ck-editor__editable ol {
+    margin-left: 1em;
+}
+
 .ck-editor__editable>ol {
     margin-left: 0;
 }
 
-.ck-editor__editable>ol ol {
-    margin-left: 1em;
+.ck-editor__editable ol>li>ul:first-of-type {
+    margin-left: 3em;
 }
 
 .ck-editor__editable ol>li:before {
@@ -32,4 +36,16 @@
     overflow-y: auto;
     font-size: 14px;
     font-family: 標楷體, Arial, "Microsoft JhengHei Revise", 微軟正黑體, "Microsoft JhengHei", 新細明體, PMingLiU, sans-serif;
+}
+
+$types: disc, circle, square;
+$selector: '.ck-content';
+$max-depth: 20;
+
+@for $i from 1 through $max-depth {
+    $selector: '#{$selector} ul';
+
+    #{$selector} {
+        list-style-type: nth($types, (($i - 1) % length($types)) + 1);
+    }
 }
