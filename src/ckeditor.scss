@@ -18,6 +18,7 @@
 
 .ck-editor__editable ol>li:before {
     content: attr(data-content);
+    width: 2em;
     background-color: #d3d3d3;
     vertical-align: top;
 }
