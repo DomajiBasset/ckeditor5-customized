@@ -1,5 +1,7 @@
-.ck-editor__editable .spanClasses {
+.ck-editor__editable p.spanClasses {
     display: inline-block;
+    width: calc(100% - 2em);
+    margin: 0;
 }
 
 .ck-editor__editable ol {
