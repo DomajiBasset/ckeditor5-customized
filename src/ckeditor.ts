@@ -24,7 +24,7 @@ import { Paragraph } from '@ckeditor/ckeditor5-paragraph';
 import { Undo } from '@ckeditor/ckeditor5-undo';
 import './ckeditor.scss';
 import './zh.ts';
-import CustomizedSymbols from './CustomSymbols';
+import CustomizedChar from './customizedChar/char';
 import CustomizedList from './customizedlist';
 
 export default class ClassicEditor extends ClassicEditorBase {
@@ -47,7 +47,7 @@ export default class ClassicEditor extends ClassicEditorBase {
 		Indent,
 		List,
 		ListProperties,
-		CustomizedSymbols,
+		CustomizedChar,
 		CustomizedList,
 	];
 

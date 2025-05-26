@@ -1,7 +1,14 @@
 import { Plugin } from '@ckeditor/ckeditor5-core';
 import { ButtonView } from '@ckeditor/ckeditor5-ui';
 
-export default class CustomizedSymbols extends Plugin {
+export default class CustomizedChar extends Plugin {
+    /**
+   * @inheritDoc
+   */
+    static get pluginName() {
+        return 'CustomizedChar';
+    }
+
     init() {
         const editor = this.editor;
         const symbols = {
