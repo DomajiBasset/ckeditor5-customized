@@ -35,8 +35,8 @@ export const renewFormat: Record<string, Format> = {
 }
 // 預設的序號呈現
 export const defLists: Record<string, string> = {
-    '0': "format1-0",
-    '1': "format1-1",
+    '0': "format1-1",
+    '1': "format1-0",
     '2': "format3-0",
     '3': "format3-1",
     '4': "format6-0",

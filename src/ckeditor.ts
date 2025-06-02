@@ -25,7 +25,7 @@ import { Undo } from '@ckeditor/ckeditor5-undo';
 import './ckeditor.scss';
 import './zh.ts';
 import CustomizedChar from './customizedChar/char';
-import CustomizedList from './customizedlist';
+import CustomizedList from './customizedList';
 
 export default class ClassicEditor extends ClassicEditorBase {
 	public static override builtinPlugins = [

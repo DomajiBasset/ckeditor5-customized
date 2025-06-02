@@ -111,6 +111,16 @@ export default class CustomizedListEditing extends Plugin {
                 }
             });
         });
+        this.listenTo(editor.commands.get('outdentList') as ListIndentCommand, 'afterExecute', (evt, changedBlocks: Array<Element>) => {
+            model.change(writer => {
+                for (const node of changedBlocks) {
+                    if (strategy.appliesToListItem(node) && node.getAttribute('listIcon')) {
+                        const currentIcon = node.getAttribute('listIcon') as string;
+                        writer.setAttribute(strategy.attributeName, parseInt(currentIcon) - 1, node);
+                    }
+                }
+            });
+        });
 
         // Verify if the list view element (ul or ol) requires refreshing.
         listEditing.on('checkAttributes:list', (evt, { viewElement, modelAttributes }) => {
