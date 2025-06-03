@@ -12,18 +12,28 @@ async function copyFolderExcludeNodeModules(srcPath, targetPath) {
     // 如果來源是檔案，使用 path.dirname() 來取得檔案的資料夾
     const srcDir = isDirectory ? srcPath : path.dirname(srcPath);
     const targetFolderPath = path.join(targetPath, path.basename(srcPath));
+    const excludeDirs = ['node_modules', '.git', '.github', 'build', 'sample', 'tests'];
+    const excludeFiles = ['README.md', 'index.html', '.gitignore', 'copyFolder.js'];
 
     await fs.copy(srcDir, targetFolderPath, {
         filter: (srcPath) => {
-            // 排除 'node_modules' 資料夾
-            return !srcPath.includes('node_modules');
+            const relativePath = path.relative(srcDir, srcPath); // 取得相對路徑
+            const pathParts = relativePath.split(path.sep);
+            const parsed = path.parse(relativePath);
+
+            // 排除資料夾
+            const inExcludedDir = excludeDirs.some(dir => pathParts.includes(dir));
+            // 排除檔案（根據檔名）
+            const isExcludedFile = excludeFiles.includes(parsed.base);
+
+            return !(inExcludedDir || isExcludedFile);
         },
     });
 }
 
 // 目標資料夾路徑：注意使用雙反斜線（\\）或正斜線（/）
 const sourceFolder = __dirname; // 當前資料夾
-const targetFolder = 'C:/Users/wellchoose/Desktop/FRONT/example/BT04T02_IFTBT(V7)_v1140410-1200_(maji)'; // 目標資料夾路徑
+const targetFolder = ''; // 目標資料夾路徑
 
 copyFolderExcludeNodeModules(sourceFolder, targetFolder)
     .then(() => console.log('資料夾複製完成，已排除 node_modules'))
