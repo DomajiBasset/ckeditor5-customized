@@ -101,7 +101,7 @@ function wrapListItemBlock(
     for (let indent = listItemIndent; indent >= 0; indent--) {
         const listItemViewElement = createListItemElement(writer, indent, currentListItem.getAttribute('listItemId'));//li
         const listViewElement = createListElement(writer, indent, currentListItem.getAttribute('listType'));//ol/ul
-        dataPipeline = dataPipeline ?? listViewElement.name === 'ul';
+        dataPipeline = listViewElement.name === 'ul';
 
         for (const strategy of strategies) {
             if (
@@ -118,7 +118,7 @@ function wrapListItemBlock(
         }
 
         if (currentListItem.getAttribute('listType') === 'numbered' && !dataPipeline) {
-            const aSpan = writer.createAttributeElement('p', {
+            const aSpan = writer.createAttributeElement('div', {
                 class: 'spanClasses'
             });
             viewRange = writer.wrap(viewRange, aSpan);
