@@ -13,7 +13,7 @@ async function copyFolderExcludeNodeModules(srcPath, targetPath) {
     const srcDir = isDirectory ? srcPath : path.dirname(srcPath);
     const targetFolderPath = path.join(targetPath, path.basename(srcPath));
     const excludeDirs = ['node_modules', '.git', '.github', 'build', 'sample', 'tests'];
-    const excludeFiles = ['README.md', 'index.html', '.gitignore', 'copyFolder.js'];
+    const excludeFiles = ['README.md', 'index.html', '.gitignore', 'copyFolder.js', 'package-lock.json', 'tsconfig.types.json'];
 
     await fs.copy(srcDir, targetFolderPath, {
         filter: (srcPath) => {
