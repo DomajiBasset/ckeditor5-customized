@@ -469,7 +469,9 @@ function updateListParents(editor: Editor) {
             const textAttrToStyleMap: Record<string, string> = {
                 fontColor: 'color',
                 fontFamily: 'font-family',
-                'selection:fontFamily': 'font-family'
+                fontSize: 'font-size',
+                'selection:fontFamily': 'font-family',
+                'selection:fontSize': 'font-size',
             }
             const styleArr: string[] = []
             for (const [attr, style] of Object.entries(textAttrToStyleMap)) {
