@@ -1,5 +1,5 @@
 import { Editor, Plugin } from '@ckeditor/ckeditor5-core';
-import { DowncastWriter, Item, Element, ViewElement, Model, Writer } from '@ckeditor/ckeditor5-engine';
+import { DowncastWriter, Item, Element, ViewElement, Model, Writer, UpcastDispatcher, UpcastElementEvent, DowncastConversionApi, Text, DowncastAttributeEvent } from '@ckeditor/ckeditor5-engine';
 import { ListEditing, ListIndentCommand } from '@ckeditor/ckeditor5-list';
 import { listItemDowncastRemoveConverter, reconvertItemsOnDataChange } from '@ckeditor/ckeditor5-list/src/list/converters';
 import { DowncastStrategy, ListEditingPostFixerEvent, ListItemAttributesMap } from '@ckeditor/ckeditor5-list/src/list/listediting';
@@ -10,6 +10,7 @@ import { ListElement, isListItemBlock } from '@ckeditor/ckeditor5-list/src/list/
 import { findAndAddListHeadToMap, fixListIndents, fixListItemIds } from '@ckeditor/ckeditor5-list/src/list/utils/postfixers.js';
 import { listItemDowncastConverter, bogusPCreator } from './converter';
 import CustomizedListStyle from './command';
+import { GetCallback } from '@ckeditor/ckeditor5-utils';
 
 const LIST_BASE_ATTRIBUTES = ['listType', 'listIndent', 'listItemId', 'listStyle'];
 
@@ -132,6 +133,16 @@ export default class CustomizedListEditing extends Plugin {
 
         this.listenTo(model.document, 'change:data', reconvertItemsOnDataChange(model, editor.editing, [strategy.attributeName], listEditing), { priority: 'high' });
         this._setupModelPostFixing(listEditing, strategy);
+
+        //https://github.com/ckeditor/ckeditor5/issues/5752
+        this._setupCustomAttribureConversion('li', elementName, 'style', editor);
+
+        editor.commands.get('fontFamily').on('change:value', (evt, propertyName, newValue, oldValue) => {
+            updateListParents(editor);
+        });
+        editor.model.document.on('change:data', () => {
+            updateListParents(editor);
+        });
     }
 
     /**
@@ -194,6 +205,103 @@ export default class CustomizedListEditing extends Plugin {
                 }
             }
         });
+    }
+
+    private _setupCustomAttribureConversion(viewElementName: string, modelElementName: string, viewAttribute: string, editor: Editor) {
+        const modelAttribute = viewAttribute;
+
+        // Extend the existing model schema
+        editor.model.schema.extend(modelElementName, { allowAttributes: [modelAttribute] });
+
+        // Add custom upcast conversion
+        editor.conversion
+            .for('upcast')
+            .add(this.upcastAttribute(modelElementName, viewElementName, viewAttribute, modelAttribute));
+
+        // Add custom downcast conversion
+        editor.conversion.for('downcast').add(dispatcher => {
+            dispatcher.on(`attribute:${modelAttribute}:${modelElementName}`, this.downcastAttribute(viewAttribute))
+        })
+    }
+
+    upcastAttribute(
+        modelElementName: string,
+        viewElementName: string,
+        viewAttribute: string,
+        modelAttribute: string
+    ): (dispatch: UpcastDispatcher) => void {
+        return (dispatcher: UpcastDispatcher): void =>
+            dispatcher.on<UpcastElementEvent>(`element:${viewElementName}`, (evt, data, conversionApi) => {
+                const { viewItem, modelRange, modelCursor } = data
+
+                if (!viewItem.hasAttribute(viewAttribute)) {
+                    return
+                }
+
+                // Get the attribute value
+                const attributeValue = viewItem.getAttribute(viewAttribute)
+
+                if (!modelRange) {
+                    console.error('Model range not found!')
+                    return
+                }
+                let modelElement = modelRange.start.nodeAfter
+                if (!modelElement || !modelElement.is('element', modelElementName)) {
+                    if (modelRange.start.parent.is('element', modelElementName)) {
+                        modelElement = modelRange.start.parent
+                    } else if (modelCursor.parent.is('element', modelElementName)) {
+                        modelElement = modelCursor.parent
+                    } else {
+                        const walker = modelRange.getWalker()
+                        for (const { item } of walker) {
+                            if (item.is('element', modelElementName)) {
+                                modelElement = item
+                                break
+                            }
+                        }
+                    }
+                }
+
+                if (!modelElement) {
+                    console.error('Model element not found')
+                    return
+                }
+
+                conversionApi.writer.setAttribute(modelAttribute, attributeValue, modelElement)
+            })
+    }
+
+    downcastAttribute(
+        viewAttribute: string
+    ): GetCallback<DowncastAttributeEvent<Element>> {
+        return (evt, data, conversionApi: DowncastConversionApi) => {
+            const modelElement = data.item;
+            let viewElement: ViewElement = null;
+
+            if (modelElement.is('selection')) {
+                const selectElement = modelElement.getFirstPosition()?.parent;
+                if (selectElement.is('element')) {
+                    viewElement = conversionApi.mapper.toViewElement(selectElement);
+                }
+            } else {
+                // Get view element that corresponds to the model element
+                viewElement = conversionApi.mapper.toViewElement(modelElement)
+            }
+            if (!viewElement) {
+                console.warn('View element not found for model element', modelElement)
+                return
+            }
+            const li = findParentWithTag(viewElement, 'li');
+            if (!li) {
+                return;
+            }
+
+            if (data.attributeNewValue === null) {
+                conversionApi.writer.removeAttribute(viewAttribute, li)
+            } else {
+                conversionApi.writer.setAttribute(viewAttribute, data.attributeNewValue, li)
+            }
+        }
     }
 }
 
@@ -316,4 +424,62 @@ function findParentWithTag(viewElement: ViewElement, tagName: string): ViewEleme
         current = current.parent && current.parent.is('element') ? current.parent : null;
     }
     return null;
+}
+
+function updateListParents(editor: Editor) {
+    const root = editor.model.document.getRoot()
+    if (!root) return
+
+    const range = editor.model.createRangeIn(root)
+    const listItemTextNodes: Text[] = []
+    const processedParents: string[] = []
+    for (const value of range.getWalker()) {
+        const { item } = value
+
+        if (item.is('$textProxy')) {
+            const parent = item.parent as Element;
+            if (parent?.hasAttribute('listIndent')) {
+                // Prevents the same parent listItem from being modified by subsequent text nodes
+                if (!processedParents.includes(parent.getAttribute('listItemId') as string)) {
+                    listItemTextNodes.push(item.textNode)
+                    processedParents.push(parent.getAttribute('listItemId') as string)
+                }
+            }
+        } else if (item.is('node')) {
+            const node = item as Element;
+            if (item.hasAttribute('listIndent') && node.childCount === 0) {
+                // Prevents the same parent listItem from being modified by subsequent text nodes
+                if (!processedParents.includes(node.getAttribute('listItemId') as string)) {
+                    listItemTextNodes.push(item as Text);
+                    processedParents.push(node.getAttribute('listItemId') as string);
+                }
+            }
+        }
+    }
+    editor.model.change(writer => {
+        listItemTextNodes.forEach(textNode => {
+            let parent: Item = null;
+            if (textNode.hasAttribute('listIndent')) {
+                parent = textNode;
+            } else {
+                parent = textNode.parent as Element;
+            }
+
+            // Add your [modelAttributeKey]: StyleSelector entries for each style you want to listenFor/apply
+            const textAttrToStyleMap: Record<string, string> = {
+                fontColor: 'color',
+                fontFamily: 'font-family',
+                'selection:fontFamily': 'font-family'
+            }
+            const styleArr: string[] = []
+            for (const [attr, style] of Object.entries(textAttrToStyleMap)) {
+                const value = textNode.getAttribute(attr);
+                if (value) styleArr.push(`${style}: ${value}`);
+            }
+            if (styleArr.length > 0) {
+                const style = styleArr.join('; ');
+                writer.setAttribute('style', style, parent);
+            }
+        })
+    })
 }

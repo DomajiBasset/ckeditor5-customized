@@ -3,12 +3,12 @@
     height: 200px;
     overflow-y: auto;
     font-size: 14px;
-    font-family: 標楷體, Arial, "Microsoft JhengHei Revise", 微軟正黑體, "Microsoft JhengHei", 新細明體, PMingLiU, sans-serif;
+    font-family: "標楷體", "Microsoft JhengHei Revise", "微軟正黑體", "Microsoft JhengHei", "新細明體", "PMingLiU", Arial, sans-serif;
 }
 
 .ck-content div.spanClasses {
     display: inline-block;
-    width: calc(100% - 2em);
+    width: calc(100% - 2.2em);
     margin: 0;
 }
 
@@ -27,7 +27,7 @@
 .ck-content ol>li:before {
     content: attr(data-content);
     display: inline-block;
-    width: 2em;
+    width: 2.2em; //新細明體、比較寬
     height: 1em;
     background-color: #d3d3d3;
     vertical-align: top;
