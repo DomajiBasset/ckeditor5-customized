@@ -31,6 +31,7 @@ export default class CustomizedChar extends Plugin {
         }
         Object.entries(symbols).forEach(([key, value]) => {
             const aChar = value;
+            // ckeditor5-ui/src/componentfactory.js: Names are returned in lower case.
             editor.ui.componentFactory.add(key, () => {
                 const button = new ButtonView();
                 button.set({

@@ -29,8 +29,9 @@ export default class CustomizedListUI extends Plugin {
         const editor = this.editor;
         const propertiesConfig = editor.config.get('list.properties');
         const normalizedConfig = getNormalizedConfig(propertiesConfig as ListPropertiesConfig);
-        const listStyleCommand = editor.commands.get('customlistStyle') as Command;
-        const parentCommandName = "numberedList";
+        const listStyleCommandName = 'customlistStyle';
+        const listStyleCommand = editor.commands.get(listStyleCommandName);
+        const parentCommandName = "customNumberedList";
         const parentCommand = editor.commands.get(parentCommandName);
         const t = editor.locale.t;
         const styleGridAriaLabel = t('Numbered list styles toolbar');
@@ -58,7 +59,11 @@ export default class CustomizedListUI extends Plugin {
             dropdownView.class = 'ck-list-styles-dropdown';
             // Main button was clicked.
             mainButtonView.on('execute', () => {
-                editor.execute(parentCommandName);
+                if (parentCommand.value) {
+                    editor.execute(parentCommandName);
+                } else {
+                    editor.execute(listStyleCommandName, { type: '0' });
+                }
                 editor.editing.view.focus();
             });
             //check title
@@ -73,10 +78,8 @@ export default class CustomizedListUI extends Plugin {
             }
             const enabledProperties = {
                 ...normalizedConfig,
-                ...(parentCommandName != 'numberedList' ? {
-                    startIndex: false,
-                    reversed: false
-                } : null)
+                startIndex: false,
+                reversed: false
             };
             let styleButtonViews: ButtonView[] = [];
             const styleButtonCreator = getStyleButtonCreator({
@@ -128,12 +131,12 @@ export default class CustomizedListUI extends Plugin {
  */
 function getStyleButtonCreator({ editor, listStyleCommand }: IStyleButton) {
     const locale = editor.locale;
-    const parentCommand = editor.commands.get('numberedList') as ListCommand;
+    const parentCommand = editor.commands.get('customNumberedList') as ListCommand;
     return ({ label, type, icon, tooltip }: IstyleDefinitions) => {
         const button = new ButtonView(locale);
         button.set({ label, icon, tooltip });
 
-        const level = `${type}`;
+        const level = String(type);
 
         listStyleCommand.on('change:value', () => {
             button.isOn = listStyleCommand.value === level;
@@ -144,8 +147,8 @@ function getStyleButtonCreator({ editor, listStyleCommand }: IStyleButton) {
 
         button.on('execute', (eventInfo, data) => {
             if (parentCommand.value) {
-                if (listStyleCommand.value === type) {
-                    editor.execute('numberedList');
+                if (listStyleCommand.value === level) {
+                    editor.execute('customNumberedList');
                 } else {
                     editor.execute('customlistStyle', { type: level });
                 }

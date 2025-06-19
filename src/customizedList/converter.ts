@@ -36,14 +36,23 @@ export function listItemDowncastConverter(
         // This is for cases when mapping is using inner view element like in the code blocks (pre > code).
         const viewElement = findMappedViewElement(listItem, mapper, editor.model)!;
 
-        // Unwrap element from current list wrappers.
-        unwrapListItemBlock(viewElement, writer);
+        switch (data.attributeKey) {
+            case 'listIcon':
+                // Unwrap element from current list wrappers.
+                unwrapListItemBlock(viewElement, writer);
 
-        const viewRange = writer.createRangeOn(viewElement);
-        // Then wrap them with the new list wrappers (UL, OL, LI).
-        wrapListItemBlock(listItem, viewRange, strategies, writer, { dataPipeline: dataPipeline });
+                const viewRange = writer.createRangeOn(viewElement);
+                // Then wrap them with the new list wrappers (UL, OL, LI).
+                wrapListItemBlock(listItem, viewRange, strategies, writer, { dataPipeline: dataPipeline });
 
-        setChineseData(viewElement, writer, editor);
+                setChineseData(viewElement, writer, editor);
+                break;
+            // case 'style':
+            //     setFontStyle(viewElement, writer, data.attributeNewValue as string);
+            //     break;
+            default:
+                break;
+        }
     };
 }
 
@@ -117,7 +126,7 @@ function wrapListItemBlock(
             }
         }
 
-        if (currentListItem.getAttribute('listType') === 'numbered' && !dataPipeline) {
+        if (currentListItem.getAttribute('listType') === 'customNumbered' && !dataPipeline) {
             const aSpan = writer.createAttributeElement('div', {
                 class: 'spanClasses'
             });
@@ -181,6 +190,23 @@ function shouldUseBogusParagraph(
     }
 
     return blocks.length < 2;
+}
+
+function setFontStyle(viewElement: ViewElement, viewWriter: DowncastWriter, attributeNewValue: string) {
+    const li = viewElement.findAncestor('li');
+
+    if (!li) {
+        return;
+    }
+
+    const viewAttribute = 'style';
+    if (li.parent?.name === 'ol') {
+        if (attributeNewValue === null) {
+            viewWriter.removeAttribute(viewAttribute, li);
+        } else {
+            viewWriter.setAttribute(viewAttribute, attributeNewValue, li);
+        }
+    }
 }
 
 function setChineseData(viewElement: ViewElement, viewWriter: DowncastWriter, editor: Editor) {

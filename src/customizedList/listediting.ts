@@ -31,11 +31,10 @@ export default class CustomizedListEditing extends Plugin {
     init() {
         const editor = this.editor;
         const model = editor.model;
-        const listEditing = editor.plugins.get(ListEditing);
         const strategy = createAttributeStrategies() as AttributeStrategy;
         strategy.addCommand(editor);
 
-        const attr = [strategy.attributeName, 'data-content'];
+        const attr = [strategy.attributeName, 'data-content', 'style'];
         model.schema.extend('$listItem', { allowAttributes: attr });
         for (const attribute of attr) {
             model.schema.setAttributeProperties(attribute, {
@@ -43,6 +42,18 @@ export default class CustomizedListEditing extends Plugin {
             });
         }
         model.schema.extend('$text', { allowAttributes: ['spanClasses'] });
+    }
+
+    /**
+    * @inheritDoc
+    */
+    afterInit() {
+        const editor = this.editor;
+        const model = editor.model;
+        const listEditing = editor.plugins.get(ListEditing);
+
+        const strategy = createAttributeStrategies() as AttributeStrategy;
+        strategy.addCommand(editor);
 
         const downcastStrategy = {
             scope: 'list',
@@ -58,7 +69,7 @@ export default class CustomizedListEditing extends Plugin {
         editor.conversion.for('editingDowncast')
             .elementToElement({
                 model: elementName,
-                view: bogusPCreator([...LIST_BASE_ATTRIBUTES, strategy.attributeName]),
+                view: bogusPCreator([...LIST_BASE_ATTRIBUTES]),
                 converterPriority: 'high'
             })
             .add(dispatcher => {
@@ -67,12 +78,15 @@ export default class CustomizedListEditing extends Plugin {
                 dispatcher.on('attribute:alignment', (evt, data, conversionApi) => {
                     const viewWriter = conversionApi.writer;
                     const viewElement = conversionApi.mapper.toViewElement(data.item);
-                    const viewItem = findParentWithTag(viewElement, 'li');
-                    if (viewItem) {
+                    if (!viewElement) {
+                        return;
+                    }
+                    const li = viewElement.findAncestor('li');
+                    if (li) {
                         if (data.attributeNewValue) {
-                            viewWriter.setStyle('text-align', data.attributeNewValue, viewItem);
+                            viewWriter.setStyle('text-align', data.attributeNewValue, li);
                         } else {
-                            viewWriter.removeStyle('text-align', viewItem);
+                            viewWriter.removeStyle('text-align', li);
                         }
                     }
                 });
@@ -80,7 +94,7 @@ export default class CustomizedListEditing extends Plugin {
         editor.conversion.for('dataDowncast')
             .elementToElement({
                 model: elementName,
-                view: bogusPCreator([...LIST_BASE_ATTRIBUTES, strategy.attributeName], { dataPipeline: true }),
+                view: bogusPCreator([...LIST_BASE_ATTRIBUTES], { dataPipeline: true }),
                 converterPriority: 'high'
             })
             .add(dispatcher => {
@@ -90,59 +104,61 @@ export default class CustomizedListEditing extends Plugin {
         // Set up conversion.
         editor.conversion.for('upcast')
             .add(dispatcher => {
-                dispatcher.on('element:ol', listPropertiesUpcastConverter(strategy));
-            });
+                // need custom
+                // dispatcher.on('element:ol', listPropertiesUpcastConverter(strategy));
+                dispatcher.on('element:li', this._setupListIconConversion('list-icon', strategy.attributeName));
+            })
 
-        // Reset list properties after indenting list items.
-        this.listenTo(editor.commands.get('indentList') as ListIndentCommand, 'afterExecute', (evt, changedBlocks: Array<Element>) => {
-            model.change(writer => {
-                for (const node of changedBlocks) {
-                    if (strategy.appliesToListItem(node)) {
-                        const currentIcon = node.getAttribute('listIcon') as string || '0';
-                        writer.setAttribute(strategy.attributeName, parseInt(currentIcon) + 1, node);
-
-                        const viewElement: ViewElement | undefined = editor.editing.mapper.toViewElement(node);
-                        // if (viewElement) {
-                        //     console.log(viewElement);
-                        //     const viewItem = findParentWithTag(viewElement, 'ul');
-                        //     if (!viewItem) {
-                        //     }
-                        // }
-                    }
+        editor.conversion.for('upcast').elementToAttribute({
+            view: 'ol',
+            model: {
+                key: 'listIcon',
+                value: (viewElement, conversionApi) => {
+                    return viewElement.getAttribute('list-icon')
                 }
-            });
-        });
-        this.listenTo(editor.commands.get('outdentList') as ListIndentCommand, 'afterExecute', (evt, changedBlocks: Array<Element>) => {
-            model.change(writer => {
-                for (const node of changedBlocks) {
-                    if (strategy.appliesToListItem(node) && node.getAttribute('listIcon')) {
-                        const currentIcon = node.getAttribute('listIcon') as string;
-                        writer.setAttribute(strategy.attributeName, parseInt(currentIcon) - 1, node);
-                    }
-                }
-            });
-        });
+            },
+            converterPriority: 'normal'
+        })
 
-        // Verify if the list view element (ul or ol) requires refreshing.
-        listEditing.on('checkAttributes:list', (evt, { viewElement, modelAttributes }) => {
-            if (strategy.getAttributeOnUpcast(viewElement) != modelAttributes[strategy.attributeName]) {
-                evt.return = true;
-                evt.stop();
-            }
-        });
-
-        this.listenTo(model.document, 'change:data', reconvertItemsOnDataChange(model, editor.editing, [strategy.attributeName], listEditing), { priority: 'high' });
+        this._setupListIndentExecute(editor, strategy);
         this._setupModelPostFixing(listEditing, strategy);
+        this.listenTo(model.document, 'change:data', reconvertItemsOnDataChange(model, editor.editing, [strategy.attributeName], listEditing), { priority: 'high' });
 
         //https://github.com/ckeditor/ckeditor5/issues/5752
         this._setupCustomAttribureConversion('li', elementName, 'style', editor);
+    }
 
-        editor.commands.get('fontFamily').on('change:value', (evt, propertyName, newValue, oldValue) => {
-            updateListParents(editor);
-        });
-        editor.model.document.on('change:data', () => {
-            updateListParents(editor);
-        });
+    private _setupListIconConversion(viewAttribute, modelAttribute): GetCallback<UpcastElementEvent> {
+        return (evt, data, conversionApi) => {
+            const { viewItem, modelRange } = data;
+            const { writer, schema, consumable } = conversionApi;
+            const parent = viewItem.parent as ViewElement;
+            const listIcon = parent.getAttribute(viewAttribute);
+            const modelElementName = 'paragraph';
+
+            if (!listIcon) {
+                return;
+            }
+            if (!modelRange) {
+                console.error('Model range not found!')
+                return
+            }
+
+            if (listIcon) {
+                const listType = "customNumbered";
+                const attributes = {
+                    'listIcon': listIcon,
+                    'listType': listType
+                };
+                for (const item of modelRange.getItems({ shallow: true })) {
+                    if (schema.checkAttribute(item, 'listItemId') && item.is('element', modelElementName) && !item.getAttribute(modelAttribute)) {
+                        if (item.getAttribute('listType') !== 'bulleted') {
+                            writer.setAttributes(attributes, item);
+                        }
+                    }
+                }
+            }
+        };
     }
 
     /**
@@ -207,6 +223,30 @@ export default class CustomizedListEditing extends Plugin {
         });
     }
 
+    // Reset list properties after indenting list items.
+    private _setupListIndentExecute(editor: Editor, strategy: AttributeStrategy) {
+        const model = editor.model;
+        const indentArr = ['indentList', 'outdentList'];
+
+        indentArr.forEach(commandName => {
+            this.listenTo(editor.commands.get(commandName) as ListIndentCommand, 'afterExecute', (evt, changedBlocks: Array<Element>) => {
+                model.change(writer => {
+                    for (const node of changedBlocks) {
+                        if (strategy.appliesToListItem(node)) {
+                            const currentIcon = node.getAttribute('listIcon') as string || '0';
+                            const iconVal = commandName === 'indentList' ? parseInt(currentIcon) + 1 : parseInt(currentIcon) - 1;
+                            writer.setAttribute(strategy.attributeName, iconVal, node);
+                        }
+                        if (node.getAttribute('style')) {
+                            const styleVal = node.getAttribute('style');
+                            writer.setAttribute('style', styleVal, node);
+                        }
+                    }
+                });
+            });
+        });
+    }
+
     private _setupCustomAttribureConversion(viewElementName: string, modelElementName: string, viewAttribute: string, editor: Editor) {
         const modelAttribute = viewAttribute;
 
@@ -220,8 +260,12 @@ export default class CustomizedListEditing extends Plugin {
 
         // Add custom downcast conversion
         editor.conversion.for('downcast').add(dispatcher => {
-            dispatcher.on(`attribute:${modelAttribute}:${modelElementName}`, this.downcastAttribute(viewAttribute))
-        })
+            dispatcher.on(`attribute`, this.downcastAttribute(viewAttribute))
+        });
+
+        editor.model.document.on('change:data', () => {
+            updateListParents(editor);
+        });
     }
 
     upcastAttribute(
@@ -267,7 +311,7 @@ export default class CustomizedListEditing extends Plugin {
                     return
                 }
 
-                conversionApi.writer.setAttribute(modelAttribute, attributeValue, modelElement)
+                conversionApi.writer.setAttribute(modelAttribute, attributeValue, modelElement);
             })
     }
 
@@ -275,31 +319,45 @@ export default class CustomizedListEditing extends Plugin {
         viewAttribute: string
     ): GetCallback<DowncastAttributeEvent<Element>> {
         return (evt, data, conversionApi: DowncastConversionApi) => {
-            const modelElement = data.item;
-            let viewElement: ViewElement = null;
+            const attributeArr = ['style', 'fontFamily', 'listIndent', 'listStyle', 'listIcon'];
+            //'attribute:style' downcast won't trigger with numberedList, so use other instead
+            if (!attributeArr.includes(data.attributeKey)) {
+                return;
+            }
+            const { writer, mapper, consumable } = conversionApi;
+            const modelItem = data.item;
+            let viewElement = mapper.toViewElement(data.item);
+            let attributeValue = null;
 
-            if (modelElement.is('selection')) {
-                const selectElement = modelElement.getFirstPosition()?.parent;
+            if (modelItem.is('selection')) {
+                const selectElement = modelItem.getFirstPosition()?.parent;
                 if (selectElement.is('element')) {
-                    viewElement = conversionApi.mapper.toViewElement(selectElement);
+                    viewElement = mapper.toViewElement(selectElement);
+                    attributeValue = selectElement.getAttribute(viewAttribute);
                 }
             } else {
-                // Get view element that corresponds to the model element
-                viewElement = conversionApi.mapper.toViewElement(modelElement)
+                attributeValue = modelItem.getAttribute(viewAttribute);
             }
+
             if (!viewElement) {
-                console.warn('View element not found for model element', modelElement)
-                return
+                // console.warn('View element not found for model element', modelItem);
+                return;
             }
-            const li = findParentWithTag(viewElement, 'li');
+            const li = viewElement.findAncestor('li');
             if (!li) {
+                // console.warn('no li viewElement', { ...viewElement });
                 return;
             }
 
             if (data.attributeNewValue === null) {
-                conversionApi.writer.removeAttribute(viewAttribute, li)
+                writer.removeAttribute(viewAttribute, li);
             } else {
-                conversionApi.writer.setAttribute(viewAttribute, data.attributeNewValue, li)
+                writer.setAttribute(viewAttribute, data.attributeNewValue, li);
+            }
+
+            // On other Attribute trigger, apply the value using the model element's style attribute
+            if (attributeValue) {
+                writer.setAttribute(viewAttribute, attributeValue, li);
             }
         }
     }
@@ -314,7 +372,7 @@ function createAttributeStrategies(): AttributeStrategy {
             editor.commands.add('customlistStyle', new CustomizedListStyle(editor, '0'));
         },
         appliesToListItem(item: Item): boolean {
-            return item.getAttribute('listType') === 'numbered';
+            return item.getAttribute('listType') === 'customNumbered';
         },
         hasValidAttribute(item: Element) {
             if (!this.appliesToListItem(item)) {
@@ -365,7 +423,6 @@ function modelChangePostFixer(
                 for (const attributeName of Array.from(item.getAttributeKeys())) {
                     if (attributeNames.includes(attributeName)) {
                         writer.removeAttribute(attributeName, item);
-
                         applied = true;
                     }
                 }
@@ -410,35 +467,26 @@ function modelChangePostFixer(
             seenIds
         }) || applied;
     }
-
     return applied;
 }
 
-function findParentWithTag(viewElement: ViewElement, tagName: string): ViewElement | null {
-    let current: ViewElement | null = viewElement;
-    tagName = tagName.toLowerCase();
-    while (current) {
-        if (current.is('element') && current.name.toLowerCase() === tagName) {
-            return current;
-        }
-        current = current.parent && current.parent.is('element') ? current.parent : null;
-    }
-    return null;
-}
-
 function updateListParents(editor: Editor) {
-    const root = editor.model.document.getRoot()
-    if (!root) return
+    const root = editor.model.document.getRoot();
+    if (!root) return;
 
-    const range = editor.model.createRangeIn(root)
-    const listItemTextNodes: Text[] = []
-    const processedParents: string[] = []
+    const range = editor.model.createRangeIn(root);
+    const listItemTextNodes: Text[] = [];
+    const processedParents: string[] = [];
+    const styleArr: Text[] = [];
     for (const value of range.getWalker()) {
-        const { item } = value
+        const { item } = value;
+        if (item.is('node') && item.hasAttribute('style') && !(item.getAttribute('listType') === 'numbered' || item.getAttribute('listType') === 'customNumbered')) {
+            styleArr.push(item as Text);
+        }
 
         if (item.is('$textProxy')) {
             const parent = item.parent as Element;
-            if (parent?.hasAttribute('listIndent')) {
+            if (parent?.hasAttribute('listItemId') && parent?.getAttribute('listType') !== 'bulleted') {
                 // Prevents the same parent listItem from being modified by subsequent text nodes
                 if (!processedParents.includes(parent.getAttribute('listItemId') as string)) {
                     listItemTextNodes.push(item.textNode)
@@ -447,7 +495,7 @@ function updateListParents(editor: Editor) {
             }
         } else if (item.is('node')) {
             const node = item as Element;
-            if (item.hasAttribute('listIndent') && node.childCount === 0) {
+            if (item.hasAttribute('listItemId') && node.childCount === 0 && item.getAttribute('listType') !== 'bulleted') {
                 // Prevents the same parent listItem from being modified by subsequent text nodes
                 if (!processedParents.includes(node.getAttribute('listItemId') as string)) {
                     listItemTextNodes.push(item as Text);
@@ -457,6 +505,10 @@ function updateListParents(editor: Editor) {
         }
     }
     editor.model.change(writer => {
+        styleArr.forEach(node => {
+            writer.removeAttribute('style', node);
+        });
+
         listItemTextNodes.forEach(textNode => {
             let parent: Item = null;
             if (textNode.hasAttribute('listIndent')) {

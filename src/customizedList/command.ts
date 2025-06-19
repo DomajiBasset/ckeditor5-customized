@@ -5,7 +5,7 @@
 import { first } from 'ckeditor5/src/utils.js';
 import { ListCommand } from '@ckeditor/ckeditor5-list';
 import { Command, type Editor } from 'ckeditor5/src/core.js';
-import { expandListBlocksToCompleteList, isListItemBlock } from '@ckeditor/ckeditor5-list/src/list/utils/model';
+import { expandListBlocksToCompleteItems, expandListBlocksToCompleteList, getListItems, getSelectedBlockObject, isListItemBlock, ListItemUid } from '@ckeditor/ckeditor5-list/src/list/utils/model';
 
 export default class CustomizedListStyle extends Command {
     defaultType: string;
@@ -36,11 +36,42 @@ export default class CustomizedListStyle extends Command {
      */
     override execute(options: any = {}) {
         const model = this.editor.model;
+        const document = model.document;
 
         model.change(writer => {
-            this.tryToConvertItemsToList(options);
-            let blocks = Array.from(model.document.selection.getSelectedBlocks())
+            const selectedBlockObject = getSelectedBlockObject(model);
+            let blocks = Array.from(document.selection.getSelectedBlocks())
                 .filter(block => block.hasAttribute('listType'));
+
+            if ((selectedBlockObject || document.selection.isCollapsed) && isListItemBlock(blocks[0])) {
+                const changedBlocks = getListItems(selectedBlockObject || blocks[0]);
+                for (const block of changedBlocks) {
+                    writer.setAttributes({
+                        listType: 'customNumbered'
+                    }, block);
+                }
+            } else if (blocks.length > 0) {
+                for (const block of blocks) {
+                    if (!block.hasAttribute('listType')) {
+                        writer.setAttributes({
+                            listIndent: 0,
+                            listItemId: ListItemUid.next(),
+                            listType: 'customNumbered'
+                        }, block);
+                    } else {
+                        for (const node of expandListBlocksToCompleteItems(block, { withNested: false })) {
+                            if (node.getAttribute('listType') != 'customNumbered') {
+                                writer.setAttributes({
+                                    listType: 'customNumbered'
+                                }, node);
+                            }
+                        }
+                    }
+                }
+            } else {
+                this.tryToConvertItemsToList(options);
+            }
+
             if (!blocks.length) {
                 return;
             }
@@ -70,7 +101,7 @@ export default class CustomizedListStyle extends Command {
      */
     _checkEnabled() {
         const editor = this.editor;
-        const numberedList = editor.commands.get('numberedList') as ListCommand;
+        const numberedList = editor.commands.get('customNumberedList') as ListCommand;
         return numberedList.isEnabled;
     }
     /**
@@ -84,7 +115,7 @@ export default class CustomizedListStyle extends Command {
         }
 
         const editor = this.editor;
-        const commandName = `numberedList`;
+        const commandName = `customNumberedList`;
         const command = editor.commands.get(commandName) as ListCommand;
         if (!command.value) {
             editor.execute(commandName);

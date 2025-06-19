@@ -12,8 +12,9 @@ li {
 .ck-editor__editable_inline:not(.ck-comment__input *) {
     height: 200px;
     overflow-y: auto;
-    font-size: 14px;
-    font-family: "標楷體", "Microsoft JhengHei Revise", "微軟正黑體", "Microsoft JhengHei", "新細明體", "PMingLiU", Arial, sans-serif;
+    // cause options and content differ, remove style
+    // font-size: 14px;
+    // font-family: "標楷體", "Microsoft JhengHei Revise", "微軟正黑體", "Microsoft JhengHei", "新細明體", "PMingLiU", Arial, sans-serif;
 }
 
 .ck-content div.spanClasses {
@@ -22,35 +23,57 @@ li {
     margin: 0;
 }
 
-.ck-content ol {
-    margin-left: 1em;
-}
-
-.ck-content>ol {
-    margin-left: 0;
-}
-
-.ck-content ol>li>ul:first-of-type {
-    margin-left: 3em;
-}
-
-.ck-content ol>li:before {
-    content: attr(data-content);
-    display: inline-block;
-    width: 2.2em; //新細明體、比較寬
-    height: 1em;
-    background-color: #d3d3d3;
-    vertical-align: top;
-}
-
 .ck-content ul {
     list-style-type: disc;
     margin-left: 1em;
 }
 
+.ck-content ol {
+    margin-left: 1em;
+}
+
+.ck-content>ul {
+    margin-left: 2em;
+}
+
+.ck-content>ol {
+    margin-left: 2em;
+}
+
+.ck-content>ol:has(>li > div.spanClasses) {
+    margin-left: 0;
+}
+
+.ck-content ol>li:has(> div.spanClasses)>ul:first-of-type {
+    margin-left: 3em;
+}
+
+.ck-content ol>li:has(> div.spanClasses)>ol:first-of-type:not(:has(div.spanClasses)) {
+    margin-left: 3em;
+}
+
 /* li 也應該繼承變數 */
 .ck-content ul>li {
     list-style-type: inherit;
+}
+
+/* li 也應該繼承變數 */
+.ck-content ol>li {
+    list-style-type: inherit;
+}
+
+.ck-content ol>li:has(> div.spanClasses) {
+    list-style: none;
+}
+
+.ck-content ol>li:has(> div.spanClasses)::before {
+    content: attr(data-content);
+    display: inline-block;
+    /*新細明體、比較寬*/
+    width: 2.2em;
+    height: 1em;
+    // background-color: #d3d3d3;
+    vertical-align: top;
 }
 
 $types: disc, circle, square;
